@@ -25,6 +25,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const jobsCollection = client.db("soloSphereDB").collection("jobs");
+    const bidsCollection = client.db("soloSphereDB").collection("bids");
 
     app.post('/add-job', async (req, res) => {
       const jobData = req.body
@@ -68,6 +69,50 @@ async function run() {
       const query = { _id: new ObjectId(id) }
       const options = { upsert: true }
       const result = await jobsCollection.updateOne(query, updated, options);
+      res.send(result);
+    })
+
+    app.post('/add-bid', async (req, res) => {
+      const bidData = req.body
+
+      const query = { email: bidData.email, jobId: bidData.jobId }
+      const alreadyExist = await bidsCollection.findOne(query)
+      if (alreadyExist) return res.status(400).send('you have already bid this job')
+
+      const result = await bidsCollection.insertOne(bidData);
+
+      const filter = { _id: new ObjectId(bidData.jobId) }
+      const update = {
+        $inc: { bid_count: 1 },
+      }
+      const updateBidCount = await jobsCollection.updateOne(filter, update)
+
+      res.send(result);
+    })
+
+    app.get('/bids/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { email }
+      const result = await bidsCollection.find(query).toArray()
+      res.send(result);
+    })
+
+
+    app.get('/bid-requests/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { buyer: email }
+      const result = await bidsCollection.find(query).toArray()
+      res.send(result);
+    })
+
+    app.patch('/bid-status-update/:id', async (req, res) => {
+      const { status } = req.body;
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) }
+      const updated = {
+        $set: { status },
+      }
+      const result = await bidsCollection.updateOne(filter, updated)
       res.send(result);
     })
 
